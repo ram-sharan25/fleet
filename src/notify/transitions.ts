@@ -18,6 +18,20 @@ export interface Notification {
   status: AgentStatus;
 }
 
+const NOTIFICATION_ICONS: Record<AgentStatus, string> = {
+  [AgentStatus.PERMIT]: '⚠️',
+  [AgentStatus.QUESTION]: '❓',
+  [AgentStatus.DONE]: '🟢',
+  [AgentStatus.IDLE]: '🔵',
+  [AgentStatus.BUSY]: '🟠',
+  [AgentStatus.SHELL]: '⚫',
+  [AgentStatus.DOWN]: '⚫',
+};
+
+export function notificationTitle(notification: Notification): string {
+  return `${NOTIFICATION_ICONS[notification.status]} ${notification.label}`;
+}
+
 // Detection: pure work->stop transitions this tick, no suppression applied. The
 // returned `previous` is rebuilt from the current states, so a pane that vanished
 // drops out naturally (no stale entries, no unbounded growth). A transition only

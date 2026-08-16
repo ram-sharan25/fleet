@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { applySuppression, decideNotifications, type Notification } from './transitions.ts';
+import { applySuppression, decideNotifications, notificationTitle, type Notification } from './transitions.ts';
 import { AgentStatus, type AgentState } from '../state/types.ts';
 
 // Minimal AgentState fixture — only paneId, status, agentType, session drive the
@@ -143,6 +143,34 @@ describe('decideNotifications — detection', () => {
     expect(candidates.map((c) => c.paneId)).toEqual(['%1']);
     expect(previous.has('%2')).toBe(false); // vanished pane drops out, no stale growth
     expect(previous.has('%1')).toBe(true);
+  });
+});
+
+describe('notificationTitle', () => {
+  test('uses the colored ready icon and the Pi-aware session/name', () => {
+    expect(
+      notificationTitle({
+        paneId: '%7',
+        agentType: 'pi',
+        label: 'study/add-pi-status',
+        status: AgentStatus.DONE,
+      }),
+    ).toBe('🟢 study/add-pi-status');
+  });
+
+  test('maps every Fleet state to its native colored notification icon', () => {
+    const cases: Array<[AgentStatus, string]> = [
+      [AgentStatus.PERMIT, '⚠️ sess'],
+      [AgentStatus.QUESTION, '❓ sess'],
+      [AgentStatus.DONE, '🟢 sess'],
+      [AgentStatus.BUSY, '🟠 sess'],
+      [AgentStatus.IDLE, '🔵 sess'],
+      [AgentStatus.SHELL, '⚫ sess'],
+      [AgentStatus.DOWN, '⚫ sess'],
+    ];
+    for (const [status, expected] of cases) {
+      expect(notificationTitle({ ...notif('%1'), status })).toBe(expected);
+    }
   });
 });
 

@@ -18,8 +18,8 @@ import { setStatePalette, setThemeMode } from './src/terminal/colors.ts';
 import { detectTheme, prepareTheme } from './src/terminal/theme.ts';
 import { watchStatusDirs } from './src/state/hooks.ts';
 import { saveRename } from './src/state/rename.ts';
-import { AgentStatus, STATUS_DISPLAY, type AgentState } from './src/state/types.ts';
-import { decideNotifications, applySuppression } from './src/notify/transitions.ts';
+import { AgentStatus, type AgentState } from './src/state/types.ts';
+import { decideNotifications, applySuppression, notificationTitle } from './src/notify/transitions.ts';
 import { readClientFocus } from './src/tmux/clients.ts';
 import { deliverDesktop } from './src/notify/deliver.ts';
 import { AgentRegistry } from './src/agents/registry.ts';
@@ -243,7 +243,7 @@ async function launchTui(): Promise<number> {
     // better a redundant toast than a missed one.
     const { focusedPanes } = readClientFocus();
     for (const n of applySuppression(candidates, focusedPanes, fleetPaneId)) {
-      deliverDesktop(`${STATUS_DISPLAY[n.status].label}: ${n.label}`, n.agentType, n.paneId);
+      deliverDesktop(notificationTitle(n), n.agentType, n.paneId);
     }
   };
 
