@@ -109,6 +109,9 @@ export interface AgentState {
   ports: number[];
   ts: number;
   agentType: string;
+  // Pi's session name as published by its extension bridge. Optional keeps
+  // existing AgentState fixtures and non-Pi integrations source-compatible.
+  piName?: string;
   // How Fleet identified the pane. Optional for source compatibility with
   // callers constructing AgentState fixtures; live refreshes always set it.
   tracking?: 'hook' | 'discovery' | 'shell';
@@ -166,6 +169,14 @@ export function windowLabel(state: AgentState): string {
   return state.window;
 }
 
+// A bridge-published Pi session name identifies pane-oriented tasks more
+// precisely than a shared tmux window. Every other agent, and unnamed Pi
+// sessions, retain Fleet's established project/window fallback.
+export function agentTaskLabel(state: AgentState): string {
+  if (state.agentType === 'pi' && state.piName) return state.piName;
+  return windowLabel(state);
+}
+
 // Precedence for a row's primary label: user rename > Claude auto-name > session.
 export function displayName(state: AgentState): string {
   return state.customName ?? state.claudeName ?? sessionLabel(state);
@@ -181,13 +192,15 @@ export interface HookStatus {
   state: string;
   pane: string;
   session: string;
+  name?: string;
   tool: string;
   ts: number;
   tmux_pid: number;
 }
 
-// HookStatus stays the pure on-disk wire shape (unchanged). ResolvedHookStatus is
-// the in-memory record after we know which agent dir produced it: the owning
+// HookStatus is the pure on-disk wire shape; optional fields keep older writers
+// compatible. ResolvedHookStatus is the in-memory record after we know which
+// agent dir produced it: the owning
 // agent name and its source dir ride WITH the data, so the read path never has to
 // re-derive who authored a status. index.ts sets AgentState.agentType from
 // `agent`, and reads the matching .events.jsonl from `statusDir`.

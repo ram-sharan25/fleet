@@ -4,6 +4,7 @@ import {
   formatPlainStatus,
   formatStatusLine,
   formatAge,
+  statusLineLabel,
   windowColorArgs,
   resolveStatusLineSegment,
 } from './status.ts';
@@ -224,6 +225,42 @@ describe('formatStatusLine', () => {
     const result = formatStatusLine(states);
     expect(result).toContain('editor');
     expect(result).not.toContain('Fix auth bug');
+  });
+
+  test('uses session/name for a bridge-named Pi pane', () => {
+    const state = makeState({ agentType: 'pi', session: 'study', window: 'node', piName: 'fix-status' });
+    expect(statusLineLabel(state)).toBe('study/fix-status');
+    expect(formatStatusLine([{ ...state, status: AgentStatus.DONE }])).toContain('#[bold]study/fix-status#[nobold]');
+  });
+
+  test('keeps the existing fallback for an unnamed Pi pane', () => {
+    expect(statusLineLabel(makeState({ agentType: 'pi', window: 'node' }))).toBe('node');
+  });
+
+  test('appends pane ids only to duplicate Pi labels', () => {
+    const result = formatStatusLine([
+      makeState({ agentType: 'pi', session: 'study', piName: 'same-task', paneId: '%1', status: AgentStatus.DONE }),
+      makeState({ agentType: 'pi', session: 'study', piName: 'same-task', paneId: '%2', status: AgentStatus.DONE }),
+      makeState({ agentType: 'pi', session: 'study', piName: 'unique-task', paneId: '%3', status: AgentStatus.DONE }),
+    ]);
+    expect(result).toContain('study/same-task [%1]');
+    expect(result).toContain('study/same-task [%2]');
+    expect(result).toContain('study/unique-task#[nobold]');
+    expect(result).not.toContain('study/unique-task [%3]');
+
+    const legacy = formatStatusLine([
+      makeState({ agentType: 'claude', window: 'same-window', paneId: '%4', status: AgentStatus.DONE }),
+      makeState({ agentType: 'claude', window: 'same-window', paneId: '%5', status: AgentStatus.DONE }),
+    ]);
+    expect(legacy).not.toContain('same-window [%4]');
+    expect(legacy).not.toContain('same-window [%5]');
+  });
+
+  test('escapes tmux formatting characters in Pi names', () => {
+    const state = makeState({ agentType: 'pi', session: 's#1', piName: 'fix-#[fg=red]', status: AgentStatus.DONE });
+    const result = formatStatusLine([state]);
+    expect(result).toContain('s##1/fix-##[fg=red]');
+    expect(result).not.toContain('s#1/fix-#[fg=red]');
   });
 
   test('appends a clickable clear-all chip when a ready agent is present', () => {

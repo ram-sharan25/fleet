@@ -2,9 +2,9 @@ import { C } from '../../terminal/colors.ts';
 import {
   AgentStatus,
   STATUS_DISPLAY,
+  agentTaskLabel,
   formatAgeDelta,
   sessionDisplay,
-  windowLabel,
   type AgentState,
 } from '../../state/types.ts';
 import type { DashboardRow } from '../app.ts';
@@ -23,15 +23,16 @@ export interface LayoutLines {
 }
 
 // Row label shared by both layouts. Grouped rows sit under a session header,
-// so repeating the session per row is noise — the window label alone names
-// them. Ungrouped rows carry the session inline. Window-presence logic keys on
-// the real session (windowLabel compares against it); only the shown string
-// swaps to the rename via sessionDisplay.
+// so repeating the session per row is noise; named Pi panes use their task name
+// and every other pane keeps its window/project fallback. Ungrouped rows carry
+// the display session inline. Duplicate Pi names gain a pane id only when the
+// surrounding group marked them as ambiguous.
 export function agentRowLabel(row: Extract<DashboardRow, { kind: 'agent' }>): string {
-  const label = windowLabel(row.state);
-  if (row.grouped) return label;
+  const label = agentTaskLabel(row.state);
+  const distinct = row.duplicateName ? `${label} [${row.state.paneId}]` : label;
+  if (row.grouped) return distinct;
   const session = sessionDisplay(row.state);
-  return label === row.state.session ? session : `${session} · ${label}`;
+  return label === row.state.session ? session : `${session} · ${distinct}`;
 }
 
 export function getStateColor(status: AgentStatus): string {

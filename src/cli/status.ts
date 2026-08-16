@@ -2,11 +2,11 @@ import {
   AgentStatus,
   ACK_ALL_RANGE,
   SIDEBAR_RANGE,
+  agentTaskLabel,
   compareStatus,
   formatAgeDelta,
   needsAttention,
   STATUS_DISPLAY,
-  windowLabel,
   type AgentState,
 } from '../state/types.ts';
 import { resolveSelector } from '../state/selector.ts';
@@ -14,6 +14,11 @@ import { buildEnvelope, classifyOutcome, isAgent, outcomeExitCode } from './sche
 
 export function formatAge(ts: number): string {
   return formatAgeDelta(Math.floor(Date.now() / 1000) - ts);
+}
+
+export function statusLineLabel(state: AgentState): string {
+  const task = agentTaskLabel(state);
+  return state.agentType === 'pi' && state.piName ? `${state.session}/${task}` : task;
 }
 
 // Leftmost chip, always rendered: toggles the fleet sidebar. Anchoring it at the
@@ -48,12 +53,23 @@ export function formatStatusLine(states: AgentState[]): string {
   filtered.sort((a, b) => compareStatus(a.status, b.status));
 
   const entries: string[] = [];
+  const baseLabels = filtered.map(statusLineLabel);
+  const piLabelCounts = new Map<string, number>();
+  for (const [index, state] of filtered.entries()) {
+    if (state.agentType === 'pi' && state.piName) {
+      const label = baseLabels[index]!;
+      piLabelCounts.set(label, (piLabelCounts.get(label) ?? 0) + 1);
+    }
+  }
 
-  for (const s of filtered) {
+  for (const [index, s] of filtered.entries()) {
     const display = STATUS_DISPLAY[s.status];
-    // tmux re-expands format directives in #() output, so a window/session
-    // name containing '#' must be escaped ('##') or it corrupts the row.
-    const label = windowLabel(s).replace(/#/g, '##');
+    const base = baseLabels[index]!;
+    const duplicatePiName = s.agentType === 'pi' && Boolean(s.piName) && (piLabelCounts.get(base) ?? 0) > 1;
+    const distinct = duplicatePiName ? `${base} [${s.paneId}]` : base;
+    // tmux re-expands format directives in #() output, so all human-controlled
+    // '#' bytes must be doubled before the label reaches the status format.
+    const label = distinct.replace(/#/g, '##');
     entries.push(
       `#[range=user|${s.paneId}]#[fg=${display.color}]${display.icon} #[bold]${label}#[nobold] ${formatAge(s.ts)}#[norange]`,
     );

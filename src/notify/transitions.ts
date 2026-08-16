@@ -1,4 +1,4 @@
-import { AgentStatus, type AgentState, sessionLabel } from '../state/types.ts';
+import { AgentStatus, agentTaskLabel, type AgentState, sessionLabel } from '../state/types.ts';
 
 // Stopped states that warrant attention. IDLE is included so hook-less discovered
 // agents (Phase 3: BUSY-glyph -> IDLE-no-glyph) notify; hooked agents normally land
@@ -23,18 +23,36 @@ export interface Notification {
 // drops out naturally (no stale entries, no unbounded growth). A transition only
 // fires when the pane's prior status was BUSY — a pane first observed already
 // stopped has no BUSY predecessor and never false-fires (the arming condition).
+export function notificationLabel(state: AgentState): string {
+  const task = agentTaskLabel(state);
+  return state.agentType === 'pi' && state.piName ? `${state.session}/${task}` : sessionLabel(state);
+}
+
 export function decideNotifications(
   states: AgentState[],
   previous: Map<string, AgentStatus>,
 ): { candidates: Notification[]; previous: Map<string, AgentStatus> } {
   const next = new Map<string, AgentStatus>();
-  const candidates: Notification[] = [];
-  for (const s of states) {
-    next.set(s.paneId, s.status);
-    if (previous.get(s.paneId) === AgentStatus.BUSY && STOP_STATES.has(s.status)) {
-      candidates.push({ paneId: s.paneId, agentType: s.agentType, label: sessionLabel(s), status: s.status });
+  const stopped: AgentState[] = [];
+  for (const state of states) {
+    next.set(state.paneId, state.status);
+    if (previous.get(state.paneId) === AgentStatus.BUSY && STOP_STATES.has(state.status)) stopped.push(state);
+  }
+
+  const labels = stopped.map(notificationLabel);
+  const piLabelCounts = new Map<string, number>();
+  for (const [index, state] of stopped.entries()) {
+    if (state.agentType === 'pi' && state.piName) {
+      const label = labels[index]!;
+      piLabelCounts.set(label, (piLabelCounts.get(label) ?? 0) + 1);
     }
   }
+  const candidates = stopped.map((state, index) => {
+    const base = labels[index]!;
+    const duplicatePiName = state.agentType === 'pi' && Boolean(state.piName) && (piLabelCounts.get(base) ?? 0) > 1;
+    const label = duplicatePiName ? `${base} [${state.paneId}]` : base;
+    return { paneId: state.paneId, agentType: state.agentType, label, status: state.status };
+  });
   return { candidates, previous: next };
 }
 

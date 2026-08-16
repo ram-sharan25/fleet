@@ -185,6 +185,23 @@ describe('grouped rows', () => {
     expect(rows.slice(1).every((r) => r.kind === 'agent' && r.grouped)).toBe(true);
   });
 
+  test('marks only duplicate Pi task names for pane-id disambiguation', () => {
+    const app = new TuiApp();
+    app.updateStates([
+      { ...makeState('study', AgentStatus.DONE, '%1'), agentType: 'pi', piName: 'same-task' },
+      { ...makeState('study', AgentStatus.IDLE, '%2'), agentType: 'pi', piName: 'same-task' },
+      { ...makeState('study', AgentStatus.IDLE, '%3'), agentType: 'pi', piName: 'unique-task' },
+    ]);
+    const agents = app.dashboardRows().filter((row) => row.kind === 'agent');
+    expect(
+      agents
+        .filter((row) => row.duplicateName)
+        .map((row) => row.state.paneId)
+        .sort(),
+    ).toEqual(['%1', '%2']);
+    expect(agents.find((row) => row.state.paneId === '%3')?.duplicateName).toBeUndefined();
+  });
+
   test('flattened agent rows match visibleStates order exactly', () => {
     const app = new TuiApp();
     app.updateStates([

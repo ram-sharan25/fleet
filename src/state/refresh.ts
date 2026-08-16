@@ -461,6 +461,7 @@ export function refreshStates(
       ports: portCache.get(pane.paneId) ?? [],
       ts,
       agentType,
+      piName: agentType === 'pi' ? hook?.name : undefined,
       tracking,
       paneTitle: pane.paneTitle,
       decision,

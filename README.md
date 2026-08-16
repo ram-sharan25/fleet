@@ -81,7 +81,7 @@ This:
 2. Creates the pi status dir (`~/.cache/pi-status`)
 3. Registers `pi` in `~/.config/fleet/agents.json`
 
-The extension publishes fleet status from pi's lifecycle events, so pi panes appear on the dashboard labeled `pi` (working / idle / done). pi auto-runs its tools, so there is no permission-prompt state to surface. Question tools do surface QUESTION while awaiting input: `@juicesharp/rpiv-ask-user-question` via its stable blocked event, and compatibility-shimmed `AskUserQuestion` tools via pi's `tool_call` lifecycle. Homebrew upgrades update the registered package in place; in an already-running pi session, `/reload` picks it up. To reverse it (leaving your own pi extensions and packages intact):
+The extension publishes fleet status and Pi's optional session name from lifecycle events. Named panes use the task name in the dashboard and `tmux-session/task-name` in Fleet's status line and desktop notifications; unnamed panes keep the existing project/window fallback. pi auto-runs its tools, so there is no permission-prompt state to surface. Question tools do surface QUESTION while awaiting input: `@juicesharp/rpiv-ask-user-question` via its stable blocked event, and compatibility-shimmed `AskUserQuestion` tools via pi's `tool_call` lifecycle. Homebrew upgrades update the registered package in place; in an already-running pi session, `/reload` picks it up. To reverse it (leaving your own pi extensions and packages intact):
 
 ```bash
 fleet uninstall pi
