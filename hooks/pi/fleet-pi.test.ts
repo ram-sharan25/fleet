@@ -58,6 +58,12 @@ describe('buildPiStatusLine', () => {
     });
   });
 
+  test('carries an optional Pi session name through fleet parsing', () => {
+    const line = buildPiStatusLine('working', '%1', 's', 'Bash', 1, 2, 'fix-status');
+    expect(parseStatusFile(line)?.name).toBe('fix-status');
+    expect(buildPiStatusLine('idle', '%1', 's', '', 1, 2)).not.toContain('"name"');
+  });
+
   test('escapes quotes/newlines in the label so the file stays valid JSON', () => {
     const line = buildPiStatusLine('working', '%1', 's', 'Bash: echo "hi"\nrm -rf', 1, 2);
     expect(() => JSON.parse(line)).not.toThrow();
@@ -88,11 +94,12 @@ describe('extension event wiring', () => {
   });
 
   // Capture the handlers the extension registers so the test can fire them.
-  function loadWithTmux(pane: string): Record<string, (e?: unknown) => void> {
+  function loadWithTmux(pane: string, initialName?: string): Record<string, (e?: unknown) => void> {
     process.env.TMUX = '/tmp/fake-tmux,1,0';
     process.env.TMUX_PANE = pane;
     const handlers: Record<string, (e?: unknown) => void> = {};
     const mockPi = {
+      getSessionName: () => initialName,
       on(event: string, handler: (e?: unknown) => void): void {
         handlers[event] = handler;
       },
@@ -157,6 +164,31 @@ describe('extension event wiring', () => {
     s = readStatus('9');
     expect(s?.state).toBe('working');
     expect(s?.tool).toBe('AskUserQuestion');
+  });
+
+  test('session_start republishes an existing state with its name after /reload', () => {
+    writeFileSync(join(statusDir, '11.status'), buildPiStatusLine('done', '%11', 'study', 'old tool', 1, 2));
+    const h = loadWithTmux('%11', 'restored-task');
+    h.session_start?.();
+    const restored = readStatus('11');
+    expect(restored?.state).toBe('done');
+    expect(restored?.tool).toBe('old tool');
+    expect(restored?.name).toBe('restored-task');
+  });
+
+  test('publishes the initial name and refreshes it on session_info_changed', () => {
+    const h = loadWithTmux('%5', 'initial-task');
+    h.session_start?.();
+    h.agent_start?.();
+    expect(readStatus('5')?.name).toBe('initial-task');
+
+    h.session_info_changed?.({ name: 'manual-name' });
+    const renamed = readStatus('5');
+    expect(renamed?.name).toBe('manual-name');
+    expect(renamed?.state).toBe('working');
+
+    h.session_info_changed?.({ name: undefined });
+    expect(readStatus('5')?.name).toBeUndefined();
   });
 
   test('session_shutdown removes the status file', () => {

@@ -1,4 +1,4 @@
-import { AgentStatus, compareStatus, windowLabel, type AgentState } from '../state/types.ts';
+import { AgentStatus, agentTaskLabel, compareStatus, type AgentState } from '../state/types.ts';
 import { repoLabelFromId } from '../state/repo-groups.ts';
 
 // A rendered dashboard line: sessions with 2+ agents get a header row followed
@@ -6,7 +6,7 @@ import { repoLabelFromId } from '../state/repo-groups.ts';
 // repo-group mode the grouping key is a repository id instead of a session.
 export type DashboardRow =
   | { kind: 'header'; session: string; label: string; count: number; aggregate: AgentStatus }
-  | { kind: 'agent'; state: AgentState; grouped: boolean };
+  | { kind: 'agent'; state: AgentState; grouped: boolean; duplicateName?: boolean };
 
 export const TuiMode = {
   DASHBOARD: 'DASHBOARD',
@@ -158,7 +158,7 @@ export class TuiApp {
       members.sort((a, b) => {
         const cmp = compareStatus(a.status, b.status);
         if (cmp !== 0) return cmp;
-        return windowLabel(a).localeCompare(windowLabel(b));
+        return agentTaskLabel(a).localeCompare(agentTaskLabel(b));
       });
       out.push(...members);
     }
@@ -187,7 +187,18 @@ export class TuiApp {
           count: members.length,
           aggregate: members[0]!.status,
         });
-        for (const member of members) rows.push({ kind: 'agent', state: member, grouped: true });
+        const piNameCounts = new Map<string, number>();
+        for (const member of members) {
+          if (member.agentType === 'pi' && member.piName) {
+            piNameCounts.set(member.piName, (piNameCounts.get(member.piName) ?? 0) + 1);
+          }
+        }
+        for (const member of members) {
+          const duplicateName = Boolean(
+            member.agentType === 'pi' && member.piName && (piNameCounts.get(member.piName) ?? 0) > 1,
+          );
+          rows.push({ kind: 'agent', state: member, grouped: true, ...(duplicateName ? { duplicateName } : {}) });
+        }
       }
       i = j;
     }
@@ -216,6 +227,7 @@ export class TuiApp {
         s.window.toLowerCase().includes(lower) ||
         (s.claudeName?.toLowerCase().includes(lower) ?? false) ||
         (s.customName?.toLowerCase().includes(lower) ?? false) ||
+        (s.piName?.toLowerCase().includes(lower) ?? false) ||
         (s.project?.toLowerCase().includes(lower) ?? false),
     );
   }

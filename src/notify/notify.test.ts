@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { applySuppression, decideNotifications, type Notification } from './transitions.ts';
+import { applySuppression, decideNotifications, notificationTitle, type Notification } from './transitions.ts';
 import { AgentStatus, type AgentState } from '../state/types.ts';
 
 // Minimal AgentState fixture — only paneId, status, agentType, session drive the
@@ -52,6 +52,42 @@ describe('decideNotifications — detection', () => {
       label: 'authkit',
       status: AgentStatus.DONE,
     });
+  });
+
+  test('named Pi transitions use the same session/name label as the status line', () => {
+    const busy = st('%7', AgentStatus.BUSY, 'study', 'pi');
+    busy.piName = 'implement-notifications';
+    const arm = decideNotifications([busy], new Map());
+    const done = st('%7', AgentStatus.DONE, 'study', 'pi');
+    done.piName = 'implement-notifications';
+
+    expect(decideNotifications([done], arm.previous).candidates[0]?.label).toBe('study/implement-notifications');
+  });
+
+  test('duplicate notification labels append pane ids only where needed', () => {
+    const busyA = st('%7', AgentStatus.BUSY, 'study', 'pi');
+    const busyB = st('%8', AgentStatus.BUSY, 'study', 'pi');
+    busyA.piName = 'fix-status';
+    busyB.piName = 'fix-status';
+    const arm = decideNotifications([busyA, busyB], new Map());
+    const doneA = { ...busyA, status: AgentStatus.DONE };
+    const doneB = { ...busyB, status: AgentStatus.DONE };
+
+    expect(decideNotifications([doneA, doneB], arm.previous).candidates.map((candidate) => candidate.label)).toEqual([
+      'study/fix-status [%7]',
+      'study/fix-status [%8]',
+    ]);
+
+    const legacyArm = decideNotifications(
+      [st('%1', AgentStatus.BUSY, 'same'), st('%2', AgentStatus.BUSY, 'same')],
+      new Map(),
+    );
+    expect(
+      decideNotifications(
+        [st('%1', AgentStatus.DONE, 'same'), st('%2', AgentStatus.DONE, 'same')],
+        legacyArm.previous,
+      ).candidates.map((candidate) => candidate.label),
+    ).toEqual(['same', 'same']);
   });
 
   test('BUSY → IDLE → one candidate (IDLE is a stop state for hook-less discovery)', () => {
@@ -107,6 +143,34 @@ describe('decideNotifications — detection', () => {
     expect(candidates.map((c) => c.paneId)).toEqual(['%1']);
     expect(previous.has('%2')).toBe(false); // vanished pane drops out, no stale growth
     expect(previous.has('%1')).toBe(true);
+  });
+});
+
+describe('notificationTitle', () => {
+  test('uses the colored ready icon and the Pi-aware session/name', () => {
+    expect(
+      notificationTitle({
+        paneId: '%7',
+        agentType: 'pi',
+        label: 'study/add-pi-status',
+        status: AgentStatus.DONE,
+      }),
+    ).toBe('🟢 study/add-pi-status');
+  });
+
+  test('maps every Fleet state to its native colored notification icon', () => {
+    const cases: Array<[AgentStatus, string]> = [
+      [AgentStatus.PERMIT, '⚠️ sess'],
+      [AgentStatus.QUESTION, '❓ sess'],
+      [AgentStatus.DONE, '🟢 sess'],
+      [AgentStatus.BUSY, '🟠 sess'],
+      [AgentStatus.IDLE, '🔵 sess'],
+      [AgentStatus.SHELL, '⚫ sess'],
+      [AgentStatus.DOWN, '⚫ sess'],
+    ];
+    for (const [status, expected] of cases) {
+      expect(notificationTitle({ ...notif('%1'), status })).toBe(expected);
+    }
   });
 });
 

@@ -17,6 +17,20 @@ describe('parseStatusFile', () => {
     expect(status!.tool).toBe('Edit');
   });
 
+  test('parses and sanitizes an optional Pi session name', () => {
+    const status = parseStatusFile(
+      JSON.stringify({ state: 'done', pane: '%1', session: 's', name: '\u001b[31m  manual\n task  ', ts: 1 }),
+    );
+    expect(status?.name).toBe('manual task');
+  });
+
+  test('drops malformed or empty names and truncates excessive names', () => {
+    expect(parseStatusFile('{"name":42}')?.name).toBeUndefined();
+    expect(parseStatusFile('{"name":"\\u0000\\n"}')?.name).toBeUndefined();
+    const name = parseStatusFile(JSON.stringify({ name: 'x'.repeat(100) }))?.name;
+    expect(name).toBe('x'.repeat(31) + '…');
+  });
+
   test('returns null for invalid JSON', () => {
     expect(parseStatusFile('not json')).toBeNull();
     expect(parseStatusFile('')).toBeNull();

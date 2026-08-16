@@ -1,7 +1,25 @@
 import { describe, expect, test } from 'bun:test';
-import { stateIcon, windowLines, type LayoutLines } from './shared.ts';
+import { agentRowLabel, stateIcon, windowLines, type LayoutLines } from './shared.ts';
 import { CARD_LAYOUT_MAX_COLS, pickLayout } from './index.ts';
-import { AgentStatus } from '../../state/types.ts';
+import { AgentStatus, type AgentState } from '../../state/types.ts';
+
+const state = (overrides: Partial<AgentState> = {}): AgentState => ({
+  paneId: '%1',
+  paneNum: 1,
+  session: 'study',
+  window: 'node',
+  windowId: '@1',
+  claudeName: null,
+  customName: null,
+  status: AgentStatus.IDLE,
+  tool: null,
+  project: '~/Brain',
+  branch: 'main',
+  ports: [],
+  ts: 1,
+  agentType: 'pi',
+  ...overrides,
+});
 
 const fake = (n: number): LayoutLines => ({
   lines: Array.from({ length: n }, (_, i) => `line${i}`),
@@ -13,6 +31,21 @@ describe('pickLayout', () => {
     expect(pickLayout(CARD_LAYOUT_MAX_COLS - 1)).toBe('cards');
     expect(pickLayout(CARD_LAYOUT_MAX_COLS)).toBe('table');
     expect(pickLayout(200)).toBe('table');
+  });
+});
+
+describe('agentRowLabel', () => {
+  test('shows the Pi session name in grouped and ungrouped rows', () => {
+    const named = state({ piName: 'fix-status' });
+    expect(agentRowLabel({ kind: 'agent', state: named, grouped: true })).toBe('fix-status');
+    expect(agentRowLabel({ kind: 'agent', state: named, grouped: false })).toBe('study · fix-status');
+  });
+
+  test('keeps the window fallback and disambiguates duplicate names only when requested', () => {
+    expect(agentRowLabel({ kind: 'agent', state: state(), grouped: true })).toBe('node');
+    expect(
+      agentRowLabel({ kind: 'agent', state: state({ piName: 'same-task' }), grouped: true, duplicateName: true }),
+    ).toBe('same-task [%1]');
   });
 });
 
