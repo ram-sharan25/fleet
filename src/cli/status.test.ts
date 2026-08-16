@@ -4,6 +4,7 @@ import {
   formatPlainStatus,
   formatStatusLine,
   formatAge,
+  statusLineLabel,
   windowColorArgs,
   resolveStatusLineSegment,
 } from './status.ts';
@@ -224,6 +225,30 @@ describe('formatStatusLine', () => {
     const result = formatStatusLine(states);
     expect(result).toContain('editor');
     expect(result).not.toContain('Fix auth bug');
+  });
+
+  test('uses session/task for a named Pi pane', () => {
+    const state = makeState({
+      agentType: 'pi',
+      session: 'study',
+      window: 'node',
+      paneTitle: 'π - debug-status-line - Brain',
+      status: AgentStatus.DONE,
+    });
+    expect(statusLineLabel(state)).toBe('study/debug-status-line');
+    const result = formatStatusLine([state]);
+    expect(result).toContain('#[bold]study/debug-status-line#[nobold]');
+    expect(result).not.toContain('#[bold]node#[nobold]');
+  });
+
+  test('falls back to the window for an unnamed Pi pane', () => {
+    const state = makeState({ agentType: 'pi', window: 'node', paneTitle: 'π - Brain' });
+    expect(statusLineLabel(state)).toBe('node');
+  });
+
+  test('keeps window-first labels for non-Pi agents with Pi-like titles', () => {
+    const state = makeState({ agentType: 'claude', window: 'editor', paneTitle: 'π - debug-status-line - Brain' });
+    expect(statusLineLabel(state)).toBe('editor');
   });
 
   test('appends a clickable clear-all chip when a ready agent is present', () => {

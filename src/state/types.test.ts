@@ -4,6 +4,7 @@ import {
   statusPriority,
   compareStatus,
   extractClaudeName,
+  extractPiTaskName,
   displayName,
   sessionDisplay,
   sessionLabel,
@@ -58,6 +59,25 @@ describe('compareStatus', () => {
     const statuses = [AgentStatus.IDLE, AgentStatus.PERMIT, AgentStatus.BUSY, AgentStatus.DONE];
     statuses.sort(compareStatus);
     expect(statuses).toEqual([AgentStatus.PERMIT, AgentStatus.DONE, AgentStatus.BUSY, AgentStatus.IDLE]);
+  });
+});
+
+describe('extractPiTaskName', () => {
+  test('extracts the session task from a named Pi pane', () => {
+    expect(extractPiTaskName('π - debug-status-line - Brain')).toBe('debug-status-line');
+  });
+
+  test('returns null before the Pi session is named', () => {
+    expect(extractPiTaskName('π - Brain')).toBeNull();
+  });
+
+  test('returns null for non-Pi pane titles', () => {
+    expect(extractPiTaskName('node')).toBeNull();
+    expect(extractPiTaskName('✳ Fix auth bug')).toBeNull();
+  });
+
+  test('trims surrounding whitespace', () => {
+    expect(extractPiTaskName('  π - fix-notifications - dotfiles  ')).toBe('fix-notifications');
   });
 });
 

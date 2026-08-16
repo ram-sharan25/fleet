@@ -3,6 +3,7 @@ import {
   ACK_ALL_RANGE,
   SIDEBAR_RANGE,
   compareStatus,
+  extractPiTaskName,
   formatAgeDelta,
   needsAttention,
   STATUS_DISPLAY,
@@ -14,6 +15,18 @@ import { buildEnvelope, classifyOutcome, isAgent, outcomeExitCode } from './sche
 
 export function formatAge(ts: number): string {
   return formatAgeDelta(Math.floor(Date.now() / 1000) - ts);
+}
+
+// Pi runs are commonly pane-oriented: multiple independent agents can share a
+// tmux window, so its window name cannot distinguish them. A named Pi session
+// is already present in that pane's OSC title; retain Fleet's window-first
+// behavior for every other agent type.
+export function statusLineLabel(state: AgentState): string {
+  if (state.agentType === 'pi') {
+    const taskName = extractPiTaskName(state.paneTitle ?? '');
+    if (taskName) return `${state.session}/${taskName}`;
+  }
+  return windowLabel(state);
 }
 
 // Leftmost chip, always rendered: toggles the fleet sidebar. Anchoring it at the
@@ -51,9 +64,9 @@ export function formatStatusLine(states: AgentState[]): string {
 
   for (const s of filtered) {
     const display = STATUS_DISPLAY[s.status];
-    // tmux re-expands format directives in #() output, so a window/session
-    // name containing '#' must be escaped ('##') or it corrupts the row.
-    const label = windowLabel(s).replace(/#/g, '##');
+    // tmux re-expands format directives in #() output, so a displayed label
+    // containing '#' must be escaped ('##') or it corrupts the row.
+    const label = statusLineLabel(s).replace(/#/g, '##');
     entries.push(
       `#[range=user|${s.paneId}]#[fg=${display.color}]${display.icon} #[bold]${label}#[nobold] ${formatAge(s.ts)}#[norange]`,
     );

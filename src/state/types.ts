@@ -129,6 +129,21 @@ export function extractClaudeName(paneTitle: string): string | null {
   return name.length > 0 ? name : null;
 }
 
+// Pi names an interactive pane `π - <session-name> - <project>` once the
+// session has a display name, and `π - <project>` before then. The generated
+// task names are separator-free kebab-case, so the first separator after the
+// prefix cleanly distinguishes a task name from an unnamed project's title.
+export function extractPiTaskName(paneTitle: string): string | null {
+  const prefix = 'π - ';
+  const trimmed = paneTitle.trim();
+  if (!trimmed.startsWith(prefix)) return null;
+  const rest = trimmed.slice(prefix.length);
+  const separator = rest.indexOf(' - ');
+  if (separator <= 0) return null;
+  const name = rest.slice(0, separator).trim();
+  return name.length > 0 ? name : null;
+}
+
 // The pane title fleet advertises via OSC 2 (tui/dashboard.ts paneTitle).
 // Title-aware window renamers copy the focused pane's title into the window
 // name, so a window ends up named after fleet itself whenever the fleet pane
