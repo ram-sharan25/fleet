@@ -229,7 +229,7 @@ Tune it with tmux options (see [Configuration](#configuration)): `@fleet_discove
 
 When an agent finishes a turn — or stops to ask you something — while you're **not** looking, Fleet fires a **silent** OS-native desktop notification (`osascript` on macOS, `notify-send` on Linux). It's deliberately soundless: at fifteen agents, a chime per finish is noise, not a signal. Delivery is best-effort and no-ops cleanly when there's no desktop session (headless, SSH).
 
-Two suppressions keep toasts from being redundant: none for the pane you're **currently focused on**, and none at all while you're **watching the Fleet dashboard itself** (you can already see the change on screen). A toast fires only on a real working → stopped transition, exactly once, and re-arms when the agent starts working again.
+Two suppressions keep toasts from being redundant: none for the pane you're **currently focused on**, and none at all while you're **watching the Fleet dashboard itself** (you can already see the change on screen). When a focused pane finishes, Fleet also marks that completion seen immediately, so it does not linger as a green attention item in the dashboard or status line. Permission and question states are never auto-cleared. A toast fires only on a real working → stopped transition, exactly once, and re-arms when the agent starts working again.
 
 The in-tmux status-line flash still fires as before. The terminal **bell**, though, is now **off by default** — turn it back on with `tmux set -g @fleet_bell on` if you want the audible cue.
 
@@ -538,7 +538,7 @@ Fleet doesn't trust any single signal. It fuses three layers for high-confidence
 
 - **Click it in the dashboard** — acknowledges in place, so you can clear several finished agents without leaving Fleet.
 - **Switch to it** (Enter, or left-click its statusline entry) — acknowledges, then takes you there.
-- **Focus its pane any other way** — reaching the pane through tmux itself (prefix keys, clicking the pane, `choose-tree`) clears it too, via a `pane-focus-in` hook, so you don't have to go through Fleet. Only a lingering `ready` chip clears this way; a pending `PERMIT`/`QUESTION` stays until you answer it on screen.
+- **Focus its pane any other way** — reaching the pane through tmux itself (prefix keys, clicking the pane, `choose-tree`) clears it too, via a `pane-focus-in` hook, so you don't have to go through Fleet. A turn that finishes while its pane is already focused is marked seen automatically. Only a `ready` completion clears this way; a pending `PERMIT`/`QUESTION` stays until you answer it on screen.
 - **Right-click its statusline entry** — acknowledges in place, without switching.
 - **Click the `✕ clear` chip** at the end of the statusline — acknowledges every ready agent at once.
 - **`fleet ack <pane>`** — from the CLI, for scripting or bulk-clearing.

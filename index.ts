@@ -19,8 +19,14 @@ import { detectTheme, prepareTheme } from './src/terminal/theme.ts';
 import { watchStatusDirs } from './src/state/hooks.ts';
 import { saveRename } from './src/state/rename.ts';
 import { AgentStatus, type AgentState } from './src/state/types.ts';
-import { decideNotifications, applySuppression, notificationTitle } from './src/notify/transitions.ts';
+import {
+  decideNotifications,
+  applySuppression,
+  focusedDonePaneIds,
+  notificationTitle,
+} from './src/notify/transitions.ts';
 import { readClientFocus } from './src/tmux/clients.ts';
+import { tmux } from './src/tmux/ipc.ts';
 import { deliverDesktop } from './src/notify/deliver.ts';
 import { AgentRegistry } from './src/agents/registry.ts';
 import type { AgentDir } from './src/agents/config.ts';
@@ -231,20 +237,28 @@ async function launchTui(): Promise<number> {
   let lastWrittenSegment: string | null = null;
   let notifyPrev = new Map<string, AgentStatus>();
 
-  // Compare this snapshot's statuses to the last and fire a silent desktop toast
-  // on each work->stop transition, suppressing the pane you're focused on (and
-  // every toast while you're watching fleet itself). Detection advances notifyPrev
-  // every call, so a transition fires exactly once and re-arms on the next BUSY.
-  const maybeNotify = (states: AgentState[]) => {
+  // Reconcile work->stop transitions with real tmux focus. Background stops
+  // produce desktop toasts; a DONE pane already visible to a focused client is
+  // acknowledged instead, so it cannot linger as a misleading status-line or
+  // dashboard attention item. PERMIT/QUESTION remain pending until answered.
+  // Returns true when acknowledgement changed persistent state and the caller
+  // must refresh before publishing this tick's snapshot.
+  const reconcileAttention = (states: AgentState[]): boolean => {
     const { candidates, previous } = decideNotifications(states, notifyPrev);
     notifyPrev = previous;
-    if (candidates.length === 0) return; // resolve focus only when something fires
-    // Empty focus set (tmux down / no clients) suppresses nothing —
-    // better a redundant toast than a missed one.
+    const hasDone = states.some((state) => state.status === AgentStatus.DONE);
+    if (candidates.length === 0 && !hasDone) return false; // avoid focus forks while quiet
+
+    // Empty focus set (tmux down / no clients) acknowledges nothing and
+    // suppresses nothing — better redundant attention than a missed completion.
     const { focusedPanes } = readClientFocus();
+    const acknowledged = focusedDonePaneIds(states, focusedPanes);
+    for (const paneId of acknowledged) acknowledgePane(paneId, statusDirs);
+
     for (const n of applySuppression(candidates, focusedPanes, fleetPaneId)) {
       deliverDesktop(notificationTitle(n), n.agentType, n.paneId);
     }
+    return acknowledged.length > 0;
   };
 
   const applyStates = (states: AgentState[]) => {
@@ -637,11 +651,18 @@ async function launchTui(): Promise<number> {
       if (tickInFlight || finished) return;
       tickInFlight = true;
       try {
-        const states = await refreshStatesTui(dirs, controlClient, controlLatch);
+        let states = await refreshStatesTui(dirs, controlClient, controlLatch);
         if (finished) return;
-        maybeNotify(states);
+        const acknowledged = reconcileAttention(states);
+        // acknowledgePane persists idle/Acknowledged. Re-read rather than
+        // patching in memory so every published surface reflects what actually
+        // reached disk/event history.
+        if (acknowledged) states = await refreshStatesTui(dirs, controlClient, controlLatch);
         if (isTyping()) return;
         applyStates(states);
+        // The status line otherwise keeps its prior rendered command output
+        // until status-interval (commonly 15s), even though its cache is fresh.
+        if (acknowledged) tmux(['refresh-client', '-S']);
         if (app.visibleStates().some((s) => s.status === AgentStatus.BUSY)) {
           app.pulsePhase = !app.pulsePhase;
           needsRender = true;

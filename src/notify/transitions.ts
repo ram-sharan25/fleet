@@ -70,6 +70,18 @@ export function decideNotifications(
   return { candidates, previous: next };
 }
 
+// A completed turn that is already visible to a real tmux client has been seen:
+// return those pane ids so the TUI can retire their persistent DONE state before
+// publishing its dashboard/status-line snapshot. Keep this separate from toast
+// suppression because PERMIT/QUESTION notifications are suppressed when visible
+// but must never be acknowledged automatically.
+export function focusedDonePaneIds(states: AgentState[], focusedPanes: Set<string>): string[] {
+  if (focusedPanes.size === 0) return [];
+  return states
+    .filter((state) => state.status === AgentStatus.DONE && focusedPanes.has(state.paneId))
+    .map((state) => state.paneId);
+}
+
 // Suppression: silent entirely while you're viewing fleet's own pane (you can
 // see the change on the dashboard); otherwise drop candidates whose pane a real
 // tmux client is currently focused on. `focusedPanes` is the multi-client focus

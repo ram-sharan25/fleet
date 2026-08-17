@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test';
-import { applySuppression, decideNotifications, notificationTitle, type Notification } from './transitions.ts';
+import {
+  applySuppression,
+  decideNotifications,
+  focusedDonePaneIds,
+  notificationTitle,
+  type Notification,
+} from './transitions.ts';
 import { AgentStatus, type AgentState } from '../state/types.ts';
 
 // Minimal AgentState fixture — only paneId, status, agentType, session drive the
@@ -171,6 +177,30 @@ describe('notificationTitle', () => {
     for (const [status, expected] of cases) {
       expect(notificationTitle({ ...notif('%1'), status })).toBe(expected);
     }
+  });
+});
+
+describe('focusedDonePaneIds', () => {
+  test('returns a DONE pane that a real client is focused on', () => {
+    expect(focusedDonePaneIds([st('%1', AgentStatus.DONE)], new Set(['%1']))).toEqual(['%1']);
+  });
+
+  test('does not acknowledge background DONE panes', () => {
+    expect(focusedDonePaneIds([st('%1', AgentStatus.DONE)], new Set(['%2']))).toEqual([]);
+  });
+
+  test('never acknowledges focused PERMIT or QUESTION panes', () => {
+    const states = [st('%1', AgentStatus.PERMIT), st('%2', AgentStatus.QUESTION)];
+    expect(focusedDonePaneIds(states, new Set(['%1', '%2']))).toEqual([]);
+  });
+
+  test('unknown focus acknowledges nothing', () => {
+    expect(focusedDonePaneIds([st('%1', AgentStatus.DONE)], new Set())).toEqual([]);
+  });
+
+  test('handles multiple clients and returns only their completed panes', () => {
+    const states = [st('%1', AgentStatus.DONE), st('%2', AgentStatus.BUSY), st('%3', AgentStatus.DONE)];
+    expect(focusedDonePaneIds(states, new Set(['%1', '%2']))).toEqual(['%1']);
   });
 });
 
